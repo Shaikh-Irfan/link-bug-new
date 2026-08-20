@@ -3,6 +3,38 @@
 import { useState } from "react";
 import { Search, RotateCw, ExternalLink, ArrowLeft, ArrowRight, Bookmark, ShieldCheck, Compass, Lock, Zap, Server } from "lucide-react";
 
+const KNOWN_BLOCKED_DOMAINS = [
+  "clickup.com",
+  "github.com",
+  "google.com",
+  "slack.com",
+  "atlassian.net",
+  "jira.com",
+  "trello.com",
+  "figma.com",
+  "zoom.us",
+  "microsoft.com",
+  "live.com",
+  "outlook.com"
+];
+
+const isUrlBlocked = (url) => {
+  try {
+    const formatted = url.trim();
+    const hostname = new URL(formatted.startsWith("http") ? formatted : "https://" + formatted).hostname.toLowerCase();
+    if (hostname.includes("google.com")) {
+      const parsed = new URL(formatted.startsWith("http") ? formatted : "https://" + formatted);
+      if (parsed.searchParams.get("igu") === "1") {
+        return false;
+      }
+      return true;
+    }
+    return KNOWN_BLOCKED_DOMAINS.some(domain => hostname === domain || hostname.endsWith("." + domain));
+  } catch (e) {
+    return false;
+  }
+};
+
 const QUICK_BOOKMARKS = [
   { name: "Google", url: "https://www.google.com/search?igu=1&q=", icon: "🔍", isSearch: true, isProxy: false },
   { name: "DuckDuckGo", url: "https://duckduckgo.com/?q=", icon: "🦆", isSearch: true, isProxy: false },
@@ -226,14 +258,36 @@ export default function OrbitBrowser() {
 
       {/* Browser Viewport */}
       <div style={styles.viewport}>
-        <iframe
-          key={iframeKey}
-          src={iframeSrc}
-          title="ORBIT In-App Browser"
-          style={styles.iframe}
-          sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-presentation"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        />
+        {isUrlBlocked(currentUrl) ? (
+          <div style={styles.blockedCard}>
+            <div style={styles.blockedIconRing}>
+              <ShieldCheck size={48} color="var(--accent)" />
+            </div>
+            <h3 style={styles.blockedTitle}>Frame Protection Active</h3>
+            <p style={styles.blockedDesc}>
+              For security, <strong>{new URL(currentUrl.startsWith("http") ? currentUrl : "https://" + currentUrl).hostname}</strong> blocks embedded viewing inside in-app frames.
+            </p>
+            <button
+              onClick={() => handleOpenExternal()}
+              style={styles.blockedBtn}
+            >
+              <ExternalLink size={16} />
+              <span>Open in Secure New Tab</span>
+            </button>
+            <div style={styles.blockedFooter}>
+              ORBIT SECURE NAVIGATION SERVICE
+            </div>
+          </div>
+        ) : (
+          <iframe
+            key={iframeKey}
+            src={iframeSrc}
+            title="ORBIT In-App Browser"
+            style={styles.iframe}
+            sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-presentation"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          />
+        )}
       </div>
 
       {/* Browser Footer Status */}
@@ -338,7 +392,9 @@ const styles = {
     gap: "0.35rem",
     padding: "0.35rem 0.6rem",
     borderRadius: "6px",
-    border: "1px solid var(--card-border)",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    borderColor: "var(--card-border)",
     fontSize: "0.72rem",
     fontWeight: "700",
     cursor: "pointer",
@@ -444,6 +500,64 @@ const styles = {
     height: "100%",
     border: "none",
     display: "block"
+  },
+  blockedCard: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "2rem",
+    textAlign: "center",
+    height: "100%",
+    backgroundColor: "var(--bg)",
+    color: "var(--text)"
+  },
+  blockedIconRing: {
+    width: "80px",
+    height: "80px",
+    borderRadius: "50%",
+    backgroundColor: "rgba(16, 185, 129, 0.08)",
+    border: "1.5px solid rgba(16, 185, 129, 0.2)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: "1.5rem",
+    boxShadow: "0 0 20px rgba(16, 185, 129, 0.05)"
+  },
+  blockedTitle: {
+    fontSize: "1.1rem",
+    fontWeight: "700",
+    marginBottom: "0.5rem",
+    color: "var(--text)"
+  },
+  blockedDesc: {
+    fontSize: "0.85rem",
+    color: "var(--muted)",
+    maxWidth: "400px",
+    lineHeight: "1.5",
+    marginBottom: "1.75rem"
+  },
+  blockedBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    backgroundColor: "var(--accent)",
+    color: "#fff",
+    border: "none",
+    padding: "0.6rem 1.2rem",
+    borderRadius: "8px",
+    fontSize: "0.85rem",
+    fontWeight: "700",
+    cursor: "pointer",
+    transition: "all 0.2s ease",
+    boxShadow: "0 4px 12px rgba(16, 185, 129, 0.2)"
+  },
+  blockedFooter: {
+    marginTop: "2rem",
+    fontSize: "0.62rem",
+    fontWeight: "700",
+    letterSpacing: "0.08em",
+    color: "var(--muted)"
   },
   browserFooter: {
     display: "flex",

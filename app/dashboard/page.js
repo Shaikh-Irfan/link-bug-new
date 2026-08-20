@@ -406,14 +406,33 @@ function DashboardContent() {
     artist: "Lofi Girl • Chill Beats",
     thumbnail: "",
     videoId: "jfKfPfyJRdk",
-    query: "lofi hip hop radio beats to relax study to"
+    query: "lofi hip hop radio beats to relax study to",
+    shouldAutoplay: false
   });
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(80);
   const [isMuted, setIsMuted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(240);
+  const [youtubeHubMode, setYoutubeHubMode] = useState("video"); // 'video' | 'audio'
+  const [startSeconds, setStartSeconds] = useState(0);
+  const [origin, setOrigin] = useState("");
+  const [playlistQueue, setPlaylistQueue] = useState([]);
+  const [isShuffle, setIsShuffle] = useState(false);
+  const [originalPlaylistQueue, setOriginalPlaylistQueue] = useState([]);
+  const [expandedPlaylist, setExpandedPlaylist] = useState(null);
+  const [playlistTracks, setPlaylistTracks] = useState([]);
+  const [isLoadingPlaylist, setIsLoadingPlaylist] = useState(false);
+  const [ytSearchQuery, setYtSearchQuery] = useState("");
+  const [ytSearchResults, setYtSearchResults] = useState([]);
+  const [ytSearchedTerm, setYtSearchedTerm] = useState("");
+  const [ytFilterCategory, setYtFilterCategory] = useState("all");
+  const [ytIsSearching, setYtIsSearching] = useState(false);
+
   const audioIframeRef = useRef(null);
+  const videoIframeRef = useRef(null);
+
+  const isVideoPlayerActive = rightPanelMode === "youtube" && (youtubeHubMode === "video" || !!currentTrack?.playlistId);
 
   // Playback timer tracker
   useEffect(() => {
@@ -427,9 +446,10 @@ function DashboardContent() {
     return () => clearInterval(timer);
   }, [isPlaying, duration]);
 
-  // Load saved music state
+  // Load saved music state & origin
   useEffect(() => {
     if (typeof window !== "undefined") {
+      setOrigin(window.location.origin);
       try {
         const savedQuery = localStorage.getItem("orbit_music_query");
         const savedTitle = localStorage.getItem("orbit_music_title");
@@ -440,16 +460,106 @@ function DashboardContent() {
             title: savedTitle || "Lofi Hip Hop Radio",
             artist: savedArtist || "Lofi Girl • Chill Beats",
             thumbnail: savedThumb || "",
-            query: savedQuery
+            query: savedQuery,
+            shouldAutoplay: false
           });
         }
       } catch (e) {}
     }
   }, []);
 
+  // Track transition between video player and background player to sync start seconds
+  const prevIsVideoPlayerActive = useRef(isVideoPlayerActive);
+  useEffect(() => {
+    if (prevIsVideoPlayerActive.current && !isVideoPlayerActive) {
+      // Transition from video player active to background player active
+      setStartSeconds(currentTime);
+    } else if (!prevIsVideoPlayerActive.current && isVideoPlayerActive) {
+      // Transition from background player active to video player active
+      setStartSeconds(currentTime);
+    }
+    prevIsVideoPlayerActive.current = isVideoPlayerActive;
+  }, [isVideoPlayerActive, currentTime]);
+
+  // Listen to messages from the YouTube player iframe to sync playback status and current time
+  useEffect(() => {
+    const handleWindowMessage = (event) => {
+      let data;
+      try {
+        data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+      } catch (e) {
+        return;
+      }
+      if (!data) return;
+
+      // Handle infoDelivery event (contains current time, duration, and playing state)
+      if (data.event === "infoDelivery" && data.info) {
+        const info = data.info;
+        if (info.playerState !== undefined) {
+          if (info.playerState === 1) { // Playing
+            setIsPlaying(true);
+          } else if (info.playerState === 2) { // Paused
+            setIsPlaying(false);
+          } else if (info.playerState === 0) { // Ended
+            setIsPlaying(false);
+            console.log("infoDelivery: Video ended. Playing next track in queue!");
+            handleNextTrack();
+          }
+        }
+        if (info.currentTime !== undefined) {
+          setCurrentTime(Math.floor(info.currentTime));
+        }
+        if (info.duration !== undefined) {
+          setDuration(info.duration);
+        }
+      }
+
+      // Handle onStateChange event (direct play/pause event broadcasts)
+      if (data.event === "onStateChange" && data.info !== undefined) {
+        const state = data.info;
+        if (state === 1) { // Playing
+          setIsPlaying(true);
+        } else if (state === 2) { // Paused
+          setIsPlaying(false);
+        } else if (state === 0) { // Ended
+          setIsPlaying(false);
+          console.log("onStateChange: Video ended. Playing next track in queue!");
+          handleNextTrack();
+        }
+      }
+    };
+
+    window.addEventListener("message", handleWindowMessage);
+    return () => window.removeEventListener("message", handleWindowMessage);
+  }, [playlistQueue, isShuffle, currentTrack]);
+
+  const handleIframeLoad = () => {
+    const targetRef = isVideoPlayerActive ? videoIframeRef : audioIframeRef;
+    console.log("Iframe loaded! Sending 'listening' event to register state changes. Target is:", isVideoPlayerActive ? "video" : "audio", "Ref populated:", !!targetRef.current);
+    if (targetRef.current && targetRef.current.contentWindow) {
+      targetRef.current.contentWindow.postMessage(
+        JSON.stringify({ event: "listening" }),
+        "*"
+      );
+      // Send initial volume/mute settings
+      targetRef.current.contentWindow.postMessage(
+        JSON.stringify({ event: "command", func: "setVolume", args: [volume] }),
+        "*"
+      );
+      if (isMuted) {
+        targetRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: "command", func: "mute", args: [] }),
+          "*"
+        );
+      }
+    }
+  };
+
   const sendAudioCommand = (func, args = []) => {
-    if (audioIframeRef.current && audioIframeRef.current.contentWindow) {
-      audioIframeRef.current.contentWindow.postMessage(
+    const targetRef = isVideoPlayerActive ? videoIframeRef : audioIframeRef;
+    console.log("sendAudioCommand targeting:", isVideoPlayerActive ? "video" : "audio", "Ref populated:", !!targetRef.current, "func:", func);
+    if (targetRef.current && targetRef.current.contentWindow) {
+      targetRef.current.contentWindow.postMessage(
         JSON.stringify({ event: "command", func, args }),
         "*"
       );
@@ -466,16 +576,83 @@ function DashboardContent() {
     }
   };
 
-  const handleNextTrack = () => {
-    sendAudioCommand("nextVideo");
+  const handleToggleShuffle = () => {
+    setIsShuffle(prev => {
+      const nextShuffle = !prev;
+      if (nextShuffle) {
+        if (playlistQueue.length > 0) {
+          const currentTrackId = currentTrack?.videoId;
+          const otherTracks = originalPlaylistQueue.filter(t => t.videoId !== currentTrackId);
+          for (let i = otherTracks.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [otherTracks[i], otherTracks[j]] = [otherTracks[j], otherTracks[i]];
+          }
+          const currTrackObj = originalPlaylistQueue.find(t => t.videoId === currentTrackId);
+          const shuffled = currTrackObj ? [currTrackObj, ...otherTracks] : otherTracks;
+          setPlaylistQueue(shuffled);
+        }
+      } else {
+        setPlaylistQueue(originalPlaylistQueue);
+      }
+      return nextShuffle;
+    });
+  };
+
+  const playQueueTrack = (track) => {
+    const plUrl = currentTrack?.playlistId ? `&list=${currentTrack.playlistId}` : "";
+    setCurrentTrack(prev => ({
+      ...prev,
+      title: track.title,
+      artist: track.channel || "YouTube Playlist",
+      thumbnail: track.thumbnail || "",
+      videoId: track.videoId,
+      query: `https://www.youtube.com/watch?v=${track.videoId}${plUrl}`,
+      shouldAutoplay: true
+    }));
     setCurrentTime(0);
+    setStartSeconds(0);
+    setDuration(parseDurationSec(track.duration));
     setIsPlaying(true);
   };
 
+  const handleNextTrack = () => {
+    if (playlistQueue.length === 0) {
+      sendAudioCommand("nextVideo");
+      return;
+    }
+
+    let nextIndex = 0;
+    const currIndex = playlistQueue.findIndex(t => t.videoId === currentTrack?.videoId);
+    if (currIndex !== -1 && currIndex < playlistQueue.length - 1) {
+      nextIndex = currIndex + 1;
+    } else {
+      nextIndex = 0; // loop back to first track
+    }
+
+    const nextTrack = playlistQueue[nextIndex];
+    if (nextTrack) {
+      playQueueTrack(nextTrack);
+    }
+  };
+
   const handlePrevTrack = () => {
-    sendAudioCommand("previousVideo");
-    setCurrentTime(0);
-    setIsPlaying(true);
+    if (playlistQueue.length === 0) {
+      sendAudioCommand("previousVideo");
+      return;
+    }
+
+    let prevIndex = 0;
+    const currIndex = playlistQueue.findIndex(t => t.videoId === currentTrack?.videoId);
+    if (currIndex !== -1 && currIndex > 0) {
+      prevIndex = currIndex - 1;
+    } else {
+      prevIndex = playlistQueue.length - 1; // loop back to last track
+    }
+
+    const prevTrack = playlistQueue[prevIndex];
+    if (prevTrack) {
+      playQueueTrack(prevTrack);
+    }
   };
 
   const handleSeek = (newSec) => {
@@ -521,9 +698,11 @@ function DashboardContent() {
       artist: track.channel || "YouTube Audio",
       thumbnail: track.thumbnail || "",
       videoId: track.videoId,
-      query: vidUrl
+      query: vidUrl,
+      shouldAutoplay: true
     });
     setCurrentTime(0);
+    setStartSeconds(0);
     setDuration(durSec);
     setIsPlaying(true);
 
@@ -537,27 +716,112 @@ function DashboardContent() {
     }
   };
 
-  const handlePlayPlaylist = (playlist) => {
+  const handlePlayPlaylist = async (playlist, tracks = []) => {
     const plUrl = `https://www.youtube.com/playlist?list=${playlist.playlistId}`;
-    setCurrentTrack({
-      title: playlist.title,
-      artist: playlist.channel || "YouTube Playlist",
-      thumbnail: playlist.thumbnail || "",
-      playlistId: playlist.playlistId,
-      query: plUrl
-    });
-    setCurrentTime(0);
-    setDuration(0);
-    setIsPlaying(true);
+    const queryToSave = playlist.query || plUrl;
+    
+    let playlistTracksList = tracks;
+    if (playlistTracksList.length === 0) {
+      try {
+        const res = await fetch(`/api/music/playlist?listId=${playlist.playlistId}`);
+        if (res.ok) {
+          const data = await res.json();
+          playlistTracksList = data.results || [];
+        }
+      } catch (err) {
+        console.error("Failed to load playlist tracks:", err);
+      }
+    }
+
+    setOriginalPlaylistQueue(playlistTracksList);
+
+    if (playlistTracksList.length > 0) {
+      let queueToSet = [...playlistTracksList];
+      let activeTrack;
+
+      if (isShuffle) {
+        // Shuffle the tracks using Fisher-Yates
+        for (let i = queueToSet.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [queueToSet[i], queueToSet[j]] = [queueToSet[j], queueToSet[i]];
+        }
+        activeTrack = queueToSet[0];
+      } else {
+        activeTrack = queueToSet[0];
+      }
+
+      setPlaylistQueue(queueToSet);
+
+      setCurrentTrack({
+        title: activeTrack.title,
+        artist: activeTrack.channel || "YouTube Playlist",
+        thumbnail: activeTrack.thumbnail || playlist.thumbnail || "",
+        playlistId: playlist.playlistId,
+        videoId: activeTrack.videoId,
+        query: `https://www.youtube.com/watch?v=${activeTrack.videoId}&list=${playlist.playlistId}`,
+        shouldAutoplay: true
+      });
+      setCurrentTime(0);
+      setStartSeconds(0);
+      setDuration(parseDurationSec(activeTrack.duration));
+      setIsPlaying(true);
+    } else {
+      setPlaylistQueue([]);
+      setCurrentTrack({
+        title: playlist.title,
+        artist: playlist.channel || "YouTube Playlist",
+        thumbnail: playlist.thumbnail || "",
+        playlistId: playlist.playlistId,
+        videoId: playlist.videoId || undefined,
+        query: queryToSave,
+        shouldAutoplay: false
+      });
+      setCurrentTime(0);
+      setStartSeconds(0);
+      setDuration(0);
+      setIsPlaying(false);
+    }
 
     if (typeof window !== "undefined") {
       try {
-        localStorage.setItem("orbit_music_query", plUrl);
+        localStorage.setItem("orbit_music_query", queryToSave);
         localStorage.setItem("orbit_music_title", playlist.title);
         localStorage.setItem("orbit_music_artist", playlist.channel || "YouTube Playlist");
         if (playlist.thumbnail) localStorage.setItem("orbit_music_thumb", playlist.thumbnail);
       } catch (e) {}
     }
+  };
+
+  const handlePlayPlaylistTrack = (track, queue, playlistId) => {
+    setOriginalPlaylistQueue(queue);
+
+    let queueToSet = [...queue];
+    if (isShuffle) {
+      // Keep selected track at index 0, shuffle the rest
+      const otherTracks = queue.filter(t => t.videoId !== track.videoId);
+      for (let i = otherTracks.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [otherTracks[i], otherTracks[j]] = [otherTracks[j], otherTracks[i]];
+      }
+      queueToSet = [track, ...otherTracks];
+    }
+
+    setPlaylistQueue(queueToSet);
+
+    const plUrl = playlistId ? `&list=${playlistId}` : "";
+    setCurrentTrack({
+      title: track.title,
+      artist: track.channel || "YouTube Playlist",
+      thumbnail: track.thumbnail || "",
+      videoId: track.videoId,
+      playlistId: playlistId || undefined,
+      query: `https://www.youtube.com/watch?v=${track.videoId}${plUrl}`,
+      shouldAutoplay: true
+    });
+    setCurrentTime(0);
+    setStartSeconds(0);
+    setDuration(parseDurationSec(track.duration));
+    setIsPlaying(true);
   };
 
   const handlePlayStation = (station) => {
@@ -566,9 +830,11 @@ function DashboardContent() {
       artist: station.artist,
       thumbnail: "",
       videoId: "",
-      query: station.query
+      query: station.query,
+      shouldAutoplay: true
     });
     setCurrentTime(0);
+    setStartSeconds(0);
     setDuration(0);
     setIsPlaying(true);
 
@@ -583,8 +849,15 @@ function DashboardContent() {
   };
 
   const audioEmbedUrl = useMemo(() => {
+    const autoplayVal = currentTrack?.shouldAutoplay ? 1 : 0;
+    const startParam = startSeconds > 0 ? `&start=${Math.floor(startSeconds)}` : "";
+    const originParam = origin ? `&origin=${encodeURIComponent(origin)}` : "";
+
     if (currentTrack?.playlistId) {
-      return `https://www.youtube-nocookie.com/embed?listType=playlist&list=${currentTrack.playlistId}&autoplay=1&enablejsapi=1`;
+      if (currentTrack?.videoId) {
+        return `https://www.youtube-nocookie.com/embed/${currentTrack.videoId}?autoplay=${autoplayVal}&enablejsapi=1${startParam}${originParam}`;
+      }
+      return `https://www.youtube-nocookie.com/embed?listType=playlist&list=${currentTrack.playlistId}&autoplay=${autoplayVal}&enablejsapi=1${startParam}${originParam}`;
     }
     const q = currentTrack?.query || "";
     if (!q || !q.trim()) return null;
@@ -592,23 +865,20 @@ function DashboardContent() {
 
     const listMatch = str.match(/[?&]list=([a-zA-Z0-9_-]+)/);
     if (listMatch && !str.includes("watch?v=")) {
-      return `https://www.youtube-nocookie.com/embed?listType=playlist&list=${listMatch[1]}&autoplay=1&enablejsapi=1`;
+      return `https://www.youtube-nocookie.com/embed?listType=playlist&list=${listMatch[1]}&autoplay=${autoplayVal}&enablejsapi=1${startParam}${originParam}`;
     }
 
     const videoMatch = str.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/)|music\.youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/);
     if (videoMatch) {
-      if (listMatch) {
-        return `https://www.youtube-nocookie.com/embed/${videoMatch[1]}?list=${listMatch[1]}&autoplay=1&enablejsapi=1`;
-      }
-      return `https://www.youtube-nocookie.com/embed/${videoMatch[1]}?autoplay=1&enablejsapi=1`;
+      return `https://www.youtube-nocookie.com/embed/${videoMatch[1]}?autoplay=${autoplayVal}&enablejsapi=1${startParam}${originParam}`;
     }
 
     if (/^[a-zA-Z0-9_-]{11}$/.test(str)) {
-      return `https://www.youtube-nocookie.com/embed/${str}?autoplay=1&enablejsapi=1`;
+      return `https://www.youtube-nocookie.com/embed/${str}?autoplay=${autoplayVal}&enablejsapi=1${startParam}${originParam}`;
     }
 
-    return `https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(str)}&autoplay=1&enablejsapi=1`;
-  }, [currentTrack]);
+    return `https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(str)}&autoplay=${autoplayVal}&enablejsapi=1${startParam}${originParam}`;
+  }, [currentTrack, startSeconds, origin]);
 
   const musicProps = {
     viewMode: musicViewMode,
@@ -619,6 +889,8 @@ function DashboardContent() {
     isMuted,
     currentTime,
     duration,
+    isShuffle,
+    onToggleShuffle: handleToggleShuffle,
     onTogglePlay: handleTogglePlay,
     onNextTrack: handleNextTrack,
     onPrevTrack: handlePrevTrack,
@@ -1412,7 +1684,31 @@ function DashboardContent() {
               onPlayTrack={handlePlayTrack}
               onPlayStation={handlePlayStation}
               onPlayPlaylist={handlePlayPlaylist}
+              onPlayPlaylistTrack={handlePlayPlaylistTrack}
+              playlistQueue={playlistQueue}
+              expandedPlaylist={expandedPlaylist}
+              onExpandedPlaylistChange={setExpandedPlaylist}
+              playlistTracks={playlistTracks}
+              onPlaylistTracksChange={setPlaylistTracks}
+              isLoadingPlaylist={isLoadingPlaylist}
+              onIsLoadingPlaylistChange={setIsLoadingPlaylist}
+              searchQuery={ytSearchQuery}
+              onSearchQueryChange={setYtSearchQuery}
+              searchResults={ytSearchResults}
+              onSearchResultsChange={setYtSearchResults}
+              searchedTerm={ytSearchedTerm}
+              onSearchedTermChange={setYtSearchedTerm}
+              filterCategory={ytFilterCategory}
+              onFilterCategoryChange={setYtFilterCategory}
+              isSearching={ytIsSearching}
+              onIsSearchingChange={setYtIsSearching}
               onSeek={handleSeek}
+              iframeRef={videoIframeRef}
+              startSeconds={startSeconds}
+              hubMode={youtubeHubMode}
+              onHubModeChange={setYoutubeHubMode}
+              origin={origin}
+              onPlayerLoad={handleIframeLoad}
             />
           ) : (
             <>
@@ -1675,13 +1971,14 @@ function DashboardContent() {
 
       {/* Persistent Global Background Audio Engine */}
       <div style={{ position: "absolute", width: "1px", height: "1px", opacity: 0.01, pointerEvents: "none", top: "-9999px", left: "-9999px", overflow: "hidden" }}>
-        {audioEmbedUrl && (
+        {!isVideoPlayerActive && audioEmbedUrl && (
           <iframe
             ref={audioIframeRef}
             src={audioEmbedUrl}
             title="Global Audio Engine"
             allow="autoplay; encrypted-media"
             style={{ width: "100px", height: "100px", border: "none" }}
+            onLoad={handleIframeLoad}
           />
         )}
       </div>

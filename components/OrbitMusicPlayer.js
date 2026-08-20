@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Sparkles, Music, Disc3, Radio } from "lucide-react";
+import { useMemo, useState, useEffect } from "react";
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Sparkles, Music, Disc3, Radio, Shuffle } from "lucide-react";
 import OrbitAnimation from "./OrbitAnimation";
 
 function formatTime(seconds) {
@@ -9,6 +9,200 @@ function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${s < 10 ? "0" : ""}${s}`;
+}
+
+function CircularEqualizer({ isPlaying, currentTrack }) {
+  const [phase, setPhase] = useState(0);
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    let animId;
+    const tick = () => {
+      setPhase(p => p + 0.08);
+      animId = requestAnimationFrame(tick);
+    };
+    animId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animId);
+  }, [isPlaying]);
+
+  const tempo = useMemo(() => {
+    const title = (currentTrack?.title || "").toLowerCase();
+    const artist = (currentTrack?.artist || "").toLowerCase();
+    
+    if (title.includes("lofi") || title.includes("chill") || title.includes("relax") || artist.includes("lofi")) {
+      return { bpm: 72, intensity: 0.7, noiseJitter: 0.08 };
+    }
+    if (title.includes("trap") || title.includes("remix") || title.includes("boost") || title.includes("edm") || title.includes("dubstep") || title.includes("bass") || title.includes("nation")) {
+      return { bpm: 132, intensity: 1.8, noiseJitter: 0.32 };
+    }
+    if (title.includes("synthwave") || title.includes("retro") || title.includes("electro") || title.includes("cyber")) {
+      return { bpm: 115, intensity: 1.3, noiseJitter: 0.2 };
+    }
+    return { bpm: 95, intensity: 1.1, noiseJitter: 0.15 };
+  }, [currentTrack]);
+
+  const getWavyCirclePath = (cx, cy, r, baseAmp, wavesCount, speed, beatEffect = 0) => {
+    const points = [];
+    const steps = 80;
+    
+    // Sync beat thumps to estimated track BPM
+    const beatInterval = (60 / tempo.bpm) * 4.8;
+    const beatTime = phase % beatInterval;
+    const beatStrength = Math.exp(-beatTime * (tempo.bpm / 50)); 
+    
+    const waveMod = Math.sin(phase * speed * 1.5) * 0.25;
+    const ampMultiplier = 0.65 + waveMod + (beatEffect * beatStrength * tempo.intensity);
+    const currentAmp = isPlaying ? baseAmp * ampMultiplier : baseAmp * 0.15;
+
+    for (let i = 0; i < steps; i++) {
+      const angle = (i / steps) * Math.PI * 2;
+      
+      // Inject high-frequency jitter/noise for Treble (outer ring)
+      const noise = beatEffect === 0 ? (Math.sin(angle * 45 + phase * 12) * tempo.noiseJitter) : 0;
+      const wavePhase = isPlaying ? phase * speed : 0;
+      
+      const currentR = r + Math.sin(angle * wavesCount - wavePhase + noise) * currentAmp;
+      
+      const x = cx + Math.cos(angle) * currentR;
+      const y = cy + Math.sin(angle) * currentR;
+      points.push(`${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`);
+    }
+    points.push('Z');
+    return points.join(' ');
+  };
+
+  // Bass: Inner magenta/pink ring - low wave count (6), large amplitude (3.2), slow rotation, heavy thumping
+  const wavyPath1 = getWavyCirclePath(60, 60, 34, 3.2, 6, 0.9, 1.0);
+  // Mid: Middle green ring - mid wave count (12), medium amplitude (2.2), average rotation, minor thumping
+  const wavyPath2 = getWavyCirclePath(60, 60, 40, 2.2, 12, 1.6, 0.4);
+  // Treble: Outer blue ring - high wave count (22), tight amplitude (1.2), fast wiggling
+  const wavyPath3 = getWavyCirclePath(60, 60, 46, 1.2, 22, 2.5, 0.0);
+
+  // Calculate dynamic beat thumping scale for visual bounce
+  const beatInterval = (60 / tempo.bpm) * 4.8;
+  const beatTime = phase % beatInterval;
+  const beatStrength = Math.exp(-beatTime * (tempo.bpm / 50)); 
+  const scaleVal = isPlaying 
+    ? 1 + (beatStrength * 0.08 * tempo.intensity)
+    : 1.0;
+
+  return (
+    <div style={styles.discSection}>
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes rotateCw {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes rotateCcw {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(-360deg); }
+        }
+        .wavy-ring {
+          transform-origin: 60px 60px;
+          transition: opacity 0.3s ease;
+        }
+        .wavy-ring.playing.ring-fast {
+          animation: rotateCw 9s linear infinite;
+        }
+        .wavy-ring.playing.ring-mid {
+          animation: rotateCcw 13s linear infinite;
+        }
+        .wavy-ring.playing.ring-slow {
+          animation: rotateCw 18s linear infinite;
+        }
+        .center-vinyl.spinning {
+          animation: rotateCw 20s linear infinite;
+        }
+      `}} />
+      <svg
+        viewBox="0 0 120 120"
+        style={{
+          ...styles.circularSvg,
+          transform: `scale(${scaleVal})`,
+          transformOrigin: '60px 60px',
+          transition: 'transform 0.05s ease-out'
+        }}
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <defs>
+          <filter id="neonGlowPink" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="1.2" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="neonGlowGreen" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="1.0" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="neonGlowBlue" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="0.8" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <clipPath id="centerCircleClip">
+            <circle cx="60" cy="60" r="28" />
+          </clipPath>
+        </defs>
+
+        {/* Wavy Equalizer Rings */}
+        <path
+          d={wavyPath1}
+          stroke="#ec4899"
+          strokeWidth="1.2"
+          fill="none"
+          filter="url(#neonGlowPink)"
+          className={`wavy-ring ring-fast ${isPlaying ? 'playing' : ''}`}
+          style={{ opacity: isPlaying ? 0.95 : 0.4 }}
+        />
+        <path
+          d={wavyPath2}
+          stroke="var(--accent)"
+          strokeWidth="1.0"
+          fill="none"
+          filter="url(#neonGlowGreen)"
+          className={`wavy-ring ring-mid ${isPlaying ? 'playing' : ''}`}
+          style={{ opacity: isPlaying ? 0.85 : 0.35 }}
+        />
+        <path
+          d={wavyPath3}
+          stroke="#2563eb"
+          strokeWidth="0.8"
+          fill="none"
+          filter="url(#neonGlowBlue)"
+          className={`wavy-ring ring-slow ${isPlaying ? 'playing' : ''}`}
+          style={{ opacity: isPlaying ? 0.75 : 0.3 }}
+        />
+
+        {/* Central Cover / Vinyl Label */}
+        <g className={`center-vinyl ${isPlaying ? 'spinning' : ''}`} style={{ transformOrigin: '60px 60px' }}>
+          <circle cx="60" cy="60" r="30" fill="var(--bg)" stroke="var(--card-border)" strokeWidth="1.5" />
+          <circle cx="60" cy="60" r="29" fill="none" stroke="var(--accent)" strokeWidth="1.5" opacity="0.4" />
+          {currentTrack?.thumbnail ? (
+            <image
+              href={currentTrack.thumbnail}
+              x="32"
+              y="32"
+              width="56"
+              height="56"
+              clipPath="url(#centerCircleClip)"
+              preserveAspectRatio="xMidYMid slice"
+            />
+          ) : (
+            <circle cx="60" cy="60" r="28" fill="#111827" />
+          )}
+          <circle cx="60" cy="60" r="4" fill="var(--card-bg)" stroke="var(--accent)" strokeWidth="1" />
+          <circle cx="60" cy="60" r="1.5" fill="#ffffff" />
+        </g>
+      </svg>
+    </div>
+  );
 }
 
 export default function OrbitMusicPlayer({
@@ -24,6 +218,8 @@ export default function OrbitMusicPlayer({
   isMuted = false,
   currentTime = 0,
   duration = 0,
+  isShuffle = false,
+  onToggleShuffle = () => {},
   onTogglePlay = () => {},
   onNextTrack = () => {},
   onPrevTrack = () => {},
@@ -31,19 +227,7 @@ export default function OrbitMusicPlayer({
   onToggleMute = () => {},
   onSeek = () => {}
 }) {
-  // Equalizer bar animation delays
-  const equalizerBars = useMemo(() => [
-    { delay: "0s" },
-    { delay: "0.15s" },
-    { delay: "0.3s" },
-    { delay: "0.1s" },
-    { delay: "0.25s" },
-    { delay: "0.05s" },
-    { delay: "0.2s" },
-    { delay: "0.35s" },
-    { delay: "0.18s" },
-    { delay: "0.08s" },
-  ], []);
+
 
   return (
     <div style={styles.container}>
@@ -92,43 +276,8 @@ export default function OrbitMusicPlayer({
 
       {viewMode === "music" ? (
         <div style={styles.playerBody}>
-          {/* Audio Visualizer & Rotating Vinyl Disc */}
-          <div style={styles.discSection}>
-            {/* Spinning Vinyl Disc */}
-            <div
-              className={`vinyl-record ${isPlaying ? "spinning" : "paused"}`}
-              style={styles.vinylDisc}
-            >
-              <div style={styles.vinylGrooves}>
-                <div style={styles.vinylCenterLabel}>
-                  {currentTrack?.thumbnail ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={currentTrack.thumbnail}
-                      alt="Cover"
-                      style={styles.centerThumb}
-                    />
-                  ) : (
-                    <Disc3 size={20} color="var(--accent)" />
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Neon Sound Wave Equalizer Bars */}
-            <div style={styles.equalizerContainer}>
-              {equalizerBars.map((bar, idx) => (
-                <div
-                  key={idx}
-                  className={`equalizer-bar ${isPlaying ? "active" : ""}`}
-                  style={{
-                    animationDelay: bar.delay,
-                    height: isPlaying ? undefined : "25%"
-                  }}
-                />
-              ))}
-            </div>
-          </div>
+          {/* Circular Equalizer Visualizer */}
+          <CircularEqualizer isPlaying={isPlaying} currentTrack={currentTrack} />
 
           {/* Track Meta Information */}
           <div style={styles.trackInfo}>
@@ -157,6 +306,18 @@ export default function OrbitMusicPlayer({
 
           {/* Audio Playback Controls */}
           <div style={styles.controlsRow}>
+            {/* Shuffle Toggle Button */}
+            <button
+              onClick={onToggleShuffle}
+              style={{
+                ...styles.controlBtn,
+                color: isShuffle ? "var(--accent)" : "var(--text)"
+              }}
+              title="Shuffle"
+            >
+              <Shuffle size={13} style={{ opacity: isShuffle ? 1 : 0.6 }} />
+            </button>
+
             {/* Previous Track */}
             <button onClick={onPrevTrack} style={styles.controlBtn} title="Previous">
               <SkipBack size={16} />
@@ -284,52 +445,12 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: "1.1rem",
-    padding: "0.3rem 0"
+    padding: "0.2rem 0"
   },
-  vinylDisc: {
-    width: "62px",
-    height: "62px",
-    borderRadius: "50%",
-    backgroundColor: "#111827",
-    border: "2px solid #374151",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    boxShadow: "0 4px 14px rgba(0,0,0,0.3)",
-    flexShrink: 0
-  },
-  vinylGrooves: {
-    width: "48px",
-    height: "48px",
-    borderRadius: "50%",
-    border: "1px dashed rgba(255,255,255,0.15)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  vinylCenterLabel: {
-    width: "26px",
-    height: "26px",
-    borderRadius: "50%",
-    backgroundColor: "var(--bg)",
-    border: "1.5px solid var(--accent)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden"
-  },
-  centerThumb: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover"
-  },
-  equalizerContainer: {
-    display: "flex",
-    alignItems: "flex-end",
-    gap: "3.5px",
-    height: "32px",
-    padding: "2px 0"
+  circularSvg: {
+    width: "120px",
+    height: "120px",
+    display: "block"
   },
   trackInfo: {
     display: "flex",

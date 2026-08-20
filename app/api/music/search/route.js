@@ -10,8 +10,30 @@ export async function GET(request) {
 
   const trimmedQuery = query.trim();
 
-  // Check if it is a direct playlist URL
+  // Check if it is a direct video + playlist URL (e.g. Mix or shared queue)
+  let directVidMatch = trimmedQuery.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/)|music\.youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/);
   const directListMatch = trimmedQuery.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+  
+  if (directVidMatch && directListMatch) {
+    const vid = directVidMatch[1];
+    const listId = directListMatch[1];
+    return NextResponse.json({
+      results: [
+        {
+          type: "playlist",
+          playlistId: listId,
+          videoId: vid,
+          query: trimmedQuery,
+          title: `Direct Playlist (${listId})`,
+          channel: "Custom Playlist",
+          videoCount: "Full Playlist",
+          thumbnail: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`
+        }
+      ]
+    });
+  }
+
+  // Check if it is a direct playlist URL only
   if (directListMatch) {
     const listId = directListMatch[1];
     return NextResponse.json({
@@ -29,7 +51,7 @@ export async function GET(request) {
   }
 
   // Check if it is a direct video URL
-  const directVidMatch = trimmedQuery.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/)|music\.youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/);
+  directVidMatch = trimmedQuery.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/)|music\.youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/);
   if (directVidMatch && !trimmedQuery.includes("list=")) {
     const vid = directVidMatch[1];
     return NextResponse.json({

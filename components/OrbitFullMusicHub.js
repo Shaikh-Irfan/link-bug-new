@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Search, Play, Music, Sparkles, Loader2, Disc3, Radio, Volume2, CheckCircle2, TrendingUp, Tv, ListMusic, Film } from "lucide-react";
+import { Search, Play, Music, Sparkles, Loader2, Disc3, Radio, Volume2, CheckCircle2, TrendingUp, Tv, ListMusic, Film, ArrowLeft } from "lucide-react";
 
 const FEATURED_STATIONS = [
   { id: "lofi", label: "🎧 Lofi Chill", title: "Lofi Hip Hop Radio", artist: "Lofi Girl • 24/7 Chill Beats", query: "lofi hip hop radio beats to relax study to", color: "#6366f1" },
@@ -27,33 +27,69 @@ export default function OrbitFullMusicHub({
   onPlayTrack,
   onPlayStation,
   onPlayPlaylist,
-  onSeek
+  onPlayPlaylistTrack,
+  playlistQueue = [],
+  expandedPlaylist = null,
+  onExpandedPlaylistChange = () => {},
+  playlistTracks = [],
+  onPlaylistTracksChange = () => {},
+  isLoadingPlaylist = false,
+  onIsLoadingPlaylistChange = () => {},
+  searchQuery = "",
+  onSearchQueryChange = () => {},
+  searchResults = [],
+  onSearchResultsChange = () => {},
+  searchedTerm = "",
+  onSearchedTermChange = () => {},
+  filterCategory = "all",
+  onFilterCategoryChange = () => {},
+  isSearching = false,
+  onIsSearchingChange = () => {},
+  onSeek,
+  iframeRef,
+  startSeconds = 0,
+  hubMode = "video",
+  onHubModeChange,
+  origin = "",
+  onPlayerLoad
 }) {
-  const [hubMode, setHubMode] = useState("video"); // 'video' | 'audio'
-  const [filterCategory, setFilterCategory] = useState("all"); // 'all' | 'video' | 'playlist'
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchedTerm, setSearchedTerm] = useState("");
+
+  const handlePlaylistClick = async (playlist) => {
+    onExpandedPlaylistChange(playlist);
+    onIsLoadingPlaylistChange(true);
+    onPlaylistTracksChange([]);
+    try {
+      const res = await fetch(`/api/music/playlist?listId=${playlist.playlistId}`);
+      if (res.ok) {
+        const data = await res.json();
+        onPlaylistTracksChange(data.results || []);
+      }
+    } catch (err) {
+      console.error("Failed to load playlist tracks:", err);
+    } finally {
+      onIsLoadingPlaylistChange(false);
+    }
+  };
 
   const handleSearchSubmit = async (e) => {
     if (e) e.preventDefault();
     if (!searchQuery.trim()) return;
 
     const term = searchQuery.trim();
-    setSearchedTerm(term);
-    setIsSearching(true);
+    onSearchedTermChange(term);
+    onIsSearchingChange(true);
+    onExpandedPlaylistChange(null);
 
     try {
       const res = await fetch(`/api/music/search?q=${encodeURIComponent(term)}`);
       if (res.ok) {
         const data = await res.json();
-        setSearchResults(data.results || []);
+        onSearchResultsChange(data.results || []);
       }
     } catch (err) {
       console.error("YouTube Hub search error:", err);
     } finally {
-      setIsSearching(false);
+      onIsSearchingChange(false);
     }
   };
 
@@ -66,18 +102,24 @@ export default function OrbitFullMusicHub({
 
   const activeVideoEmbedUrl = useMemo(() => {
     if (!currentTrack) return null;
+    const autoplayVal = currentTrack.shouldAutoplay ? 1 : 0;
+    const startParam = startSeconds > 0 ? `&start=${Math.floor(startSeconds)}` : "";
+    const originParam = origin ? `&origin=${encodeURIComponent(origin)}` : "";
     if (currentTrack.playlistId) {
-      return `https://www.youtube-nocookie.com/embed?listType=playlist&list=${currentTrack.playlistId}&autoplay=1`;
+      if (currentTrack.videoId) {
+        return `https://www.youtube-nocookie.com/embed/${currentTrack.videoId}?autoplay=${autoplayVal}&enablejsapi=1${startParam}${originParam}`;
+      }
+      return `https://www.youtube-nocookie.com/embed?listType=playlist&list=${currentTrack.playlistId}&autoplay=${autoplayVal}&enablejsapi=1${startParam}${originParam}`;
     }
     if (currentTrack.videoId) {
-      return `https://www.youtube-nocookie.com/embed/${currentTrack.videoId}?autoplay=1`;
+      return `https://www.youtube-nocookie.com/embed/${currentTrack.videoId}?autoplay=${autoplayVal}&enablejsapi=1${startParam}${originParam}`;
     }
     if (currentTrack.query) {
       const vidMatch = currentTrack.query.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|shorts\/)|music\.youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/);
-      if (vidMatch) return `https://www.youtube-nocookie.com/embed/${vidMatch[1]}?autoplay=1`;
+      if (vidMatch) return `https://www.youtube-nocookie.com/embed/${vidMatch[1]}?autoplay=${autoplayVal}&enablejsapi=1${startParam}${originParam}`;
     }
     return null;
-  }, [currentTrack]);
+  }, [currentTrack, startSeconds, origin]);
 
   return (
     <div style={styles.container}>
@@ -86,7 +128,7 @@ export default function OrbitFullMusicHub({
         <div style={styles.bannerLeft}>
           <div style={styles.modeSwitchGroup}>
             <button
-              onClick={() => setHubMode("video")}
+              onClick={() => onHubModeChange && onHubModeChange("video")}
               style={{
                 ...styles.modeSwitchBtn,
                 ...(hubMode === "video" ? styles.modeSwitchBtnActive : {})
@@ -96,7 +138,7 @@ export default function OrbitFullMusicHub({
               <span>Watch Video</span>
             </button>
             <button
-              onClick={() => setHubMode("audio")}
+              onClick={() => onHubModeChange && onHubModeChange("audio")}
               style={{
                 ...styles.modeSwitchBtn,
                 ...(hubMode === "audio" ? styles.modeSwitchBtnActive : {})
@@ -138,7 +180,7 @@ export default function OrbitFullMusicHub({
           <input
             type="text"
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={e => onSearchQueryChange(e.target.value)}
             placeholder="Search videos, songs, albums, playlists, or paste any YouTube/YT Music link..."
             style={styles.searchInput}
           />
@@ -151,16 +193,35 @@ export default function OrbitFullMusicHub({
       {/* Content Body */}
       <div style={styles.contentScroll}>
         {/* VIDEO MODE: Embedded Screen when active */}
-        {hubMode === "video" && (
+        {(hubMode === "video" || !!currentTrack?.playlistId) && (
           <div style={styles.videoPlayerSection}>
+            {hubMode === "audio" && (
+              <div style={{
+                backgroundColor: "rgba(16, 185, 129, 0.1)",
+                border: "1px solid rgba(16, 185, 129, 0.2)",
+                borderRadius: "8px",
+                padding: "0.5rem 0.75rem",
+                marginBottom: "0.5rem",
+                fontSize: "0.8rem",
+                color: "var(--accent)",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem"
+              }}>
+                <span style={{ fontWeight: "700" }}>Playlist Loaded:</span>
+                <span>Click the list icon in the top-right corner of the player to choose a track.</span>
+              </div>
+            )}
             {activeVideoEmbedUrl ? (
               <div style={styles.videoFrameContainer}>
                 <iframe
+                  ref={iframeRef}
                   src={activeVideoEmbedUrl}
                   title="YouTube Video Player"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
                   style={styles.videoIframe}
+                  onLoad={onPlayerLoad}
                 />
               </div>
             ) : (
@@ -172,22 +233,7 @@ export default function OrbitFullMusicHub({
               </div>
             )}
 
-            {/* Interactive Seek Timeline Bar */}
-            {duration > 0 && (
-              <div style={styles.timelineBar}>
-                <span style={styles.timeText}>{formatTime(currentTime)}</span>
-                <input
-                  type="range"
-                  min="0"
-                  max={duration}
-                  value={currentTime}
-                  onChange={e => onSeek && onSeek(Number(e.target.value))}
-                  style={styles.seekSlider}
-                  title={`Seek: ${formatTime(currentTime)} / ${formatTime(duration)}`}
-                />
-                <span style={styles.timeText}>{formatTime(duration)}</span>
-              </div>
-            )}
+
           </div>
         )}
 
@@ -207,7 +253,7 @@ export default function OrbitFullMusicHub({
               {/* Filter Pills */}
               <div style={styles.filterPills}>
                 <button
-                  onClick={() => setFilterCategory("all")}
+                  onClick={() => onFilterCategoryChange("all")}
                   style={{
                     ...styles.filterPill,
                     ...(filterCategory === "all" ? styles.filterPillActive : {})
@@ -216,7 +262,7 @@ export default function OrbitFullMusicHub({
                   All
                 </button>
                 <button
-                  onClick={() => setFilterCategory("playlist")}
+                  onClick={() => onFilterCategoryChange("playlist")}
                   style={{
                     ...styles.filterPill,
                     ...(filterCategory === "playlist" ? styles.filterPillActive : {})
@@ -225,7 +271,7 @@ export default function OrbitFullMusicHub({
                   📑 Playlists & Albums
                 </button>
                 <button
-                  onClick={() => setFilterCategory("video")}
+                  onClick={() => onFilterCategoryChange("video")}
                   style={{
                     ...styles.filterPill,
                     ...(filterCategory === "video" ? styles.filterPillActive : {})
@@ -240,6 +286,79 @@ export default function OrbitFullMusicHub({
               <div style={styles.loadingBox}>
                 <Loader2 size={28} color="var(--accent)" className="spin" />
                 <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Finding tracks on YouTube...</span>
+              </div>
+            ) : expandedPlaylist ? (
+              <div style={styles.playlistDetailContainer}>
+                {/* Back Button */}
+                <button
+                  onClick={() => onExpandedPlaylistChange(null)}
+                  style={styles.backBtn}
+                >
+                  <ArrowLeft size={14} />
+                  <span>Back to Search Results</span>
+                </button>
+
+                {/* Playlist Header Card */}
+                <div style={styles.playlistHeaderCard}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={expandedPlaylist.thumbnail}
+                    alt={expandedPlaylist.title}
+                    style={styles.playlistHeaderThumb}
+                  />
+                  <div style={styles.playlistHeaderMeta}>
+                    <h3 style={styles.playlistHeaderTitle}>{expandedPlaylist.title}</h3>
+                    <p style={styles.playlistHeaderChannel}>{expandedPlaylist.channel}</p>
+                    <p style={styles.playlistHeaderCount}>{isLoadingPlaylist ? "..." : playlistTracks.length} tracks</p>
+                    
+                    {/* Play All Button */}
+                    <button
+                      onClick={() => onPlayPlaylist(expandedPlaylist, playlistTracks)}
+                      style={styles.playAllBtn}
+                    >
+                      <Play size={10} fill="#fff" color="#fff" />
+                      <span>Play Playlist</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tracks List */}
+                <div style={styles.playlistTracksList}>
+                  {isLoadingPlaylist ? (
+                    <div style={styles.loadingBox}>
+                      <Loader2 size={24} color="var(--accent)" className="spin" />
+                      <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>Loading tracks...</span>
+                    </div>
+                  ) : playlistTracks.length === 0 ? (
+                    <div style={styles.emptyBox}>
+                      <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>No songs found in this playlist.</span>
+                    </div>
+                  ) : (
+                    (expandedPlaylist?.playlistId === currentTrack?.playlistId && playlistQueue.length > 0 ? playlistQueue : playlistTracks).map((track, trackIdx) => {
+                      const isCurrentTrack = currentTrack?.videoId === track.videoId;
+                      return (
+                        <div
+                          key={track.videoId || trackIdx}
+                          onClick={() => onPlayPlaylistTrack ? onPlayPlaylistTrack(track, playlistTracks, expandedPlaylist.playlistId) : onPlayTrack(track)}
+                          style={{
+                            ...styles.playlistTrackRow,
+                            backgroundColor: isCurrentTrack ? "rgba(16, 185, 129, 0.08)" : "var(--card-bg)",
+                            borderLeft: isCurrentTrack ? "3px solid var(--accent)" : "3px solid transparent"
+                          }}
+                        >
+                          <span style={styles.trackIndex}>{trackIdx + 1}</span>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={track.thumbnail} alt="" style={styles.trackRowThumb} />
+                          <div style={styles.trackRowMeta}>
+                            <span style={styles.trackRowTitle}>{track.title}</span>
+                            <span style={styles.trackRowArtist}>{track.channel}</span>
+                          </div>
+                          <span style={styles.trackRowDuration}>{track.duration}</span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             ) : filteredResults.length === 0 ? (
               <div style={styles.emptyBox}>
@@ -257,7 +376,7 @@ export default function OrbitFullMusicHub({
                   return (
                     <div
                       key={item.playlistId || item.videoId || idx}
-                      onClick={() => isPlaylist ? onPlayPlaylist(item) : onPlayTrack(item)}
+                      onClick={() => isPlaylist ? handlePlaylistClick(item) : onPlayTrack(item)}
                       style={{
                         ...styles.trackCard,
                         border: isCurrent ? "1px solid var(--accent)" : "1px solid var(--card-border)",
@@ -581,7 +700,9 @@ const styles = {
     fontSize: "0.68rem",
     fontWeight: "600",
     borderRadius: "12px",
-    border: "1px solid var(--card-border)",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    borderColor: "var(--card-border)",
     backgroundColor: "var(--card-bg)",
     color: "var(--muted)",
     cursor: "pointer",
@@ -754,5 +875,141 @@ const styles = {
     position: "absolute",
     top: "6px",
     right: "6px"
+  },
+  playlistDetailContainer: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.8rem",
+    padding: "0.4rem"
+  },
+  backBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.35rem",
+    backgroundColor: "transparent",
+    border: "none",
+    color: "var(--accent)",
+    fontSize: "0.78rem",
+    fontWeight: "600",
+    cursor: "pointer",
+    width: "fit-content",
+    padding: "0.2rem 0",
+    transition: "color 0.2s"
+  },
+  playlistHeaderCard: {
+    display: "flex",
+    alignItems: "center",
+    gap: "1rem",
+    padding: "0.8rem",
+    borderRadius: "10px",
+    backgroundColor: "var(--card-bg)",
+    border: "1px solid var(--card-border)"
+  },
+  playlistHeaderThumb: {
+    width: "80px",
+    height: "80px",
+    borderRadius: "8px",
+    objectFit: "cover",
+    flexShrink: 0
+  },
+  playlistHeaderMeta: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.15rem",
+    flex: 1,
+    overflow: "hidden"
+  },
+  playlistHeaderTitle: {
+    fontSize: "0.95rem",
+    fontWeight: "800",
+    color: "var(--text)",
+    margin: 0,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis"
+  },
+  playlistHeaderChannel: {
+    fontSize: "0.72rem",
+    color: "var(--muted)",
+    margin: 0
+  },
+  playlistHeaderCount: {
+    fontSize: "0.68rem",
+    color: "var(--accent)",
+    margin: "0 0 0.4rem 0",
+    fontWeight: "700"
+  },
+  playAllBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.4rem",
+    padding: "0.35rem 0.8rem",
+    backgroundColor: "var(--accent)",
+    color: "#fff",
+    border: "none",
+    borderRadius: "6px",
+    fontSize: "0.72rem",
+    fontWeight: "700",
+    cursor: "pointer",
+    width: "fit-content",
+    transition: "all 0.15s ease"
+  },
+  playlistTracksList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.4rem",
+    marginTop: "0.2rem"
+  },
+  playlistTrackRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.75rem",
+    padding: "0.45rem 0.6rem",
+    borderRadius: "6px",
+    backgroundColor: "var(--card-bg)",
+    border: "1px solid var(--card-border)",
+    cursor: "pointer",
+    transition: "all 0.15s ease"
+  },
+  trackIndex: {
+    fontSize: "0.72rem",
+    fontWeight: "600",
+    color: "var(--muted)",
+    width: "16px",
+    textAlign: "center"
+  },
+  trackRowThumb: {
+    width: "42px",
+    height: "28px",
+    borderRadius: "4px",
+    objectFit: "cover",
+    flexShrink: 0
+  },
+  trackRowMeta: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.05rem",
+    overflow: "hidden"
+  },
+  trackRowTitle: {
+    fontSize: "0.78rem",
+    fontWeight: "700",
+    color: "var(--text)",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis"
+  },
+  trackRowArtist: {
+    fontSize: "0.62rem",
+    color: "var(--muted)",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis"
+  },
+  trackRowDuration: {
+    fontSize: "0.68rem",
+    color: "var(--muted)",
+    fontWeight: "600"
   }
 };
