@@ -1,0 +1,755 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap');
+
+:root {
+  --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-outfit: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --bg: #f8fafc;
+  --bg2: #f1f5f9;
+  --text: #0f172a;
+  --muted: #64748b;
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0;
+  --card-hover: #f8fafc;
+  --line: #cbd5e1;
+  --accent: #10b981;
+  --accent-muted: rgba(16, 185, 129, 0.1);
+  --danger: #ef4444;
+  --warning: #eab308;
+}
+
+[data-theme="dark"] {
+  --bg: #09090b;
+  --bg2: #18181b;
+  --text: #e4e4e7;
+  --muted: #a1a1aa;
+  --card-bg: #18181b;
+  --card-border: rgba(255, 255, 255, 0.08);
+  --card-hover: rgba(255, 255, 255, 0.04);
+  --line: rgba(255, 255, 255, 0.1);
+  --accent: #2ecc71;
+  --accent-muted: rgba(46, 204, 113, 0.1);
+  color-scheme: dark;
+}
+
+[data-theme="dark"] .column-label {
+  color: #a6ff00;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  scroll-behavior: smooth;
+  background-color: var(--bg);
+  color: var(--text);
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  font-family: var(--font-inter), sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  /* Slightly smaller baseline */
+  -webkit-font-smoothing: antialiased;
+  color-scheme: light;
+}
+
+/* Typography Classes */
+.page-title {
+  font-family: var(--font-outfit), sans-serif;
+  font-weight: 700;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.section-header {
+  font-family: var(--font-outfit), sans-serif;
+  font-weight: 700;
+  font-size: 1.6rem;
+  letter-spacing: -0.01em;
+}
+
+.column-label {
+  font-family: var(--font-inter), sans-serif;
+  font-weight: 800;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #047857;
+}
+
+.live-counter {
+  font-family: var(--font-outfit), sans-serif;
+  font-weight: 500;
+  font-size: 1.25rem;
+  color: var(--text);
+}
+
+/* Base Inputs and Buttons */
+input,
+button,
+select {
+  font-family: inherit;
+  color: inherit;
+  transition: all 0.2s ease;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+input:focus,
+button:focus,
+select:focus {
+  outline: none;
+  border-color: var(--muted) !important;
+}
+
+/* Hide native date picker icon so the entire input can act as the trigger */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  display: none;
+  -webkit-appearance: none;
+}
+
+/* Utilities */
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--card-border);
+}
+
+.smooth-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--card-border);
+  border-left-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+.spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--card-border);
+  border-left-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.orbit-loader {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.orbit-text {
+  font-family: var(--font-outfit), sans-serif;
+  font-weight: 800;
+  font-size: 1.25rem;
+  color: var(--text);
+  letter-spacing: 0.15em;
+  z-index: 2;
+}
+
+.orbit-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px dashed var(--card-border);
+  animation: orbit-spin-slow 10s linear infinite;
+}
+
+.orbit-satellite {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  animation: orbit-spin 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.orbit-satellite::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent);
+}
+
+@keyframes orbit-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes orbit-spin-slow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-360deg); }
+}
+
+.orbit-logo-container {
+  display: inline-flex;
+  align-items: center;
+}
+
+.planet-o {
+  --p-c1: #022c22;
+  --p-c2: #064e3b;
+  --p-c3: #047857;
+  --p-c4: #065f46;
+  --ast-color: #09090b;
+  
+  position: relative;
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  border-radius: 50%;
+  background: linear-gradient(15deg, var(--p-c1) 0%, var(--p-c2) 40%, var(--p-c3) 60%, var(--p-c4) 80%, var(--p-c1) 100%);
+  box-shadow: inset -3px -3px 8px rgba(0,0,0,0.7), inset 2px 2px 6px rgba(255,255,255,0.3);
+  color: transparent;
+  margin-right: 0.05em;
+  transform-style: preserve-3d;
+}
+
+[data-theme="dark"] .planet-o {
+  --p-c1: #6ee7b7;
+  --p-c2: #d1fae5;
+  --p-c3: #ecfdf5;
+  --p-c4: #a7f3d0;
+  --ast-color: #f8fafc;
+}
+
+.planet-o::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border-radius: 50%;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 15%,
+    rgba(0,0,0,0.15) 15%,
+    rgba(0,0,0,0.15) 20%,
+    transparent 20%,
+    transparent 40%,
+    rgba(255,255,255,0.1) 40%,
+    rgba(255,255,255,0.1) 45%
+  );
+  box-shadow: inset -3px -3px 8px rgba(0,0,0,0.4);
+  pointer-events: none;
+}
+
+.planet-o::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 170%;
+  height: 170%;
+  border-radius: 50%;
+  border: 6px dotted var(--ast-color);
+  transform: translate(-50%, -50%) rotateX(75deg) rotateY(15deg);
+  animation: asteroid-spin 6s linear infinite;
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px rgba(255,255,255,0.3));
+}
+
+@keyframes asteroid-spin {
+  0% { transform: translate(-50%, -50%) rotateX(75deg) rotateY(15deg) rotateZ(0deg); }
+  100% { transform: translate(-50%, -50%) rotateX(75deg) rotateY(15deg) rotateZ(360deg); }
+}
+
+.rbit-text {
+  background: linear-gradient(90deg, var(--text) 0%, var(--accent) 50%, var(--text) 100%);
+  background-size: 200% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: shine 4s linear infinite;
+}
+
+@keyframes shine {
+  to {
+    background-position: 200% center;
+  }
+}
+
+/* Orange Escalation Indicator Dot & Pulse Animation */
+.orange-pulse-dot {
+  width: 9px;
+  height: 9px;
+  background-color: #f97316;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7);
+  animation: orange-pulse 1.4s infinite cubic-bezier(0.4, 0, 0.6, 1);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+@keyframes orange-pulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.8);
+  }
+  70% {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 7px rgba(249, 115, 22, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0);
+  }
+}
+
+/* Orange Cell & Flash Focus */
+.orange-cell-active {
+  background-color: rgba(249, 115, 22, 0.14) !important;
+  border-left: 3px solid #f97316 !important;
+  border-bottom: 1px solid rgba(249, 115, 22, 0.35) !important;
+}
+
+[data-theme="dark"] .orange-cell-active {
+  background-color: rgba(249, 115, 22, 0.22) !important;
+  border-left: 3px solid #fb923c !important;
+  border-bottom: 1px solid rgba(251, 146, 60, 0.3) !important;
+}
+
+.flash-focus {
+  animation: cell-flash-glow 1.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes cell-flash-glow {
+  0% {
+    outline: 2px solid #f97316;
+    box-shadow: 0 0 14px rgba(249, 115, 22, 0.8);
+    transform: scale(1.02);
+  }
+  50% {
+    outline: 2px solid #f97316;
+    box-shadow: 0 0 8px rgba(249, 115, 22, 0.5);
+    transform: scale(1.01);
+  }
+  100% {
+    outline: none;
+    box-shadow: none;
+    transform: scale(1);
+  }
+}
+
+/* Cosmic Orbit Long Loop Animations */
+.cosmic-orbit-outer {
+  transform-origin: 110px 110px;
+  animation: cosmic-spin-outer 32s linear infinite;
+}
+
+.cosmic-orbit-middle {
+  transform-origin: 110px 110px;
+  animation: cosmic-spin-mid 20s linear infinite reverse;
+}
+
+.cosmic-orbit-inner {
+  transform-origin: 110px 110px;
+  animation: cosmic-spin-inner 12s linear infinite;
+}
+
+.cosmic-radar-sweeper {
+  transform-origin: 110px 110px;
+  animation: cosmic-spin-radar 22s linear infinite;
+}
+
+.cosmic-core-glow {
+  transform-origin: 110px 110px;
+  animation: cosmic-pulse-glow 7s ease-in-out infinite;
+}
+
+.cosmic-halo-spin {
+  transform-origin: 110px 110px;
+  animation: cosmic-halo-wobble 8s ease-in-out infinite;
+}
+
+.cosmic-star {
+  animation: cosmic-star-twinkle infinite ease-in-out;
+}
+
+@keyframes cosmic-spin-outer {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes cosmic-spin-mid {
+  from { transform: rotate(35deg); }
+  to { transform: rotate(395deg); }
+}
+
+@keyframes cosmic-spin-inner {
+  from { transform: rotate(-25deg); }
+  to { transform: rotate(335deg); }
+}
+
+@keyframes cosmic-spin-radar {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes cosmic-pulse-glow {
+  0%, 100% {
+    transform: scale(0.92);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 0.95;
+  }
+}
+
+@keyframes cosmic-halo-wobble {
+  0%, 100% {
+    transform: rotate(-15deg) scaleY(0.9);
+  }
+  50% {
+    transform: rotate(25deg) scaleY(1.1);
+  }
+}
+
+@keyframes cosmic-star-twinkle {
+  0%, 100% {
+    opacity: 0.2;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.3);
+  }
+}
+
+/* 3D Holo-Globe & Reactor Animations */
+.holo-gyro-1 {
+  transform-origin: 110px 110px;
+  animation: holo-spin-gyro-1 28s linear infinite;
+}
+
+.holo-gyro-2 {
+  transform-origin: 110px 110px;
+  animation: holo-spin-gyro-2 22s linear infinite reverse;
+}
+
+.holo-globe-longitudes {
+  transform-origin: 110px 110px;
+  animation: holo-longitudes-drift 16s ease-in-out infinite;
+}
+
+.holo-equator-pulse {
+  animation: holo-equator-glow 4s ease-in-out infinite;
+}
+
+.holo-vertical-scanner {
+  animation: holo-scan-vertical 4.5s ease-in-out infinite;
+}
+
+.reactor-hex-outer {
+  transform-origin: 110px 110px;
+  animation: cosmic-spin-outer 36s linear infinite;
+}
+
+.reactor-hex-mid {
+  transform-origin: 110px 110px;
+  animation: cosmic-spin-mid 24s linear infinite reverse;
+}
+
+.reactor-ring-cw {
+  transform-origin: 110px 110px;
+  animation: cosmic-spin-outer 18s linear infinite;
+}
+
+.reactor-ring-ccw {
+  transform-origin: 110px 110px;
+  animation: cosmic-spin-outer 14s linear infinite reverse;
+}
+
+.reactor-ring-cw-fast {
+  transform-origin: 110px 110px;
+  animation: cosmic-spin-outer 8s linear infinite;
+}
+
+@keyframes holo-spin-gyro-1 {
+  from { transform: rotate(45deg); }
+  to { transform: rotate(405deg); }
+}
+
+@keyframes holo-spin-gyro-2 {
+  from { transform: rotate(-45deg); }
+  to { transform: rotate(315deg); }
+}
+
+@keyframes holo-longitudes-drift {
+  0%, 100% {
+    transform: rotate(0deg) scaleX(1);
+  }
+  50% {
+    transform: rotate(6deg) scaleX(0.85);
+  }
+}
+
+@keyframes holo-equator-glow {
+  0%, 100% {
+    opacity: 0.6;
+    stroke-width: 1px;
+  }
+  50% {
+    opacity: 1;
+    stroke-width: 1.5px;
+  }
+}
+
+@keyframes holo-scan-vertical {
+  0%, 100% {
+    transform: translateY(-40px);
+    opacity: 0.2;
+  }
+  50% {
+    transform: translateY(40px);
+    opacity: 0.9;
+  }
+}
+
+/* Sci-Fi UFO Abduction Animations */
+.ufo-hover-craft {
+  transform-origin: 120px 80px;
+  animation: ufo-hover-drift 12s ease-in-out infinite;
+}
+
+.ufo-tractor-cone {
+  animation: ufo-tractor-pulse 3s ease-in-out infinite alternate;
+}
+
+.ufo-abducted-object {
+  animation: ufo-object-levitate 6s ease-in-out infinite alternate;
+}
+
+.ufo-object-halo {
+  transform-origin: 120px 161px;
+  animation: cosmic-spin-outer 4s linear infinite;
+}
+
+.ufo-thruster-pulse {
+  animation: ufo-thruster-glow 1.8s ease-in-out infinite alternate;
+}
+
+.ufo-alien-pilot {
+  transform-origin: 120px 62px;
+  animation: ufo-alien-nod 6s ease-in-out infinite;
+}
+
+.ufo-top-beacon {
+  animation: ufo-beacon-blink 1.2s ease-in-out infinite alternate;
+}
+
+.ufo-radar-rings {
+  transform-origin: 120px 85px;
+  animation: ufo-radar-expand 4s ease-out infinite;
+}
+
+.ufo-beam-scanline-1 { animation: ufo-scan-line 3s linear infinite; }
+.ufo-beam-scanline-2 { animation: ufo-scan-line 3.8s linear infinite 0.8s; }
+.ufo-beam-scanline-3 { animation: ufo-scan-line 4.2s linear infinite 1.6s; }
+
+.ufo-led-1 { animation: ufo-led-glow 1.6s ease-in-out infinite 0.0s; }
+.ufo-led-2 { animation: ufo-led-glow 1.6s ease-in-out infinite 0.2s; }
+.ufo-led-3 { animation: ufo-led-glow 1.6s ease-in-out infinite 0.4s; }
+.ufo-led-4 { animation: ufo-led-glow 1.6s ease-in-out infinite 0.6s; }
+.ufo-led-5 { animation: ufo-led-glow 1.6s ease-in-out infinite 0.8s; }
+.ufo-led-6 { animation: ufo-led-glow 1.6s ease-in-out infinite 1.0s; }
+.ufo-led-7 { animation: ufo-led-glow 1.6s ease-in-out infinite 1.2s; }
+.ufo-led-8 { animation: ufo-led-glow 1.6s ease-in-out infinite 1.4s; }
+
+@keyframes ufo-hover-drift {
+  0% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-8px) rotate(2.5deg);
+  }
+  50% {
+    transform: translateY(4px) rotate(-2deg);
+  }
+  75% {
+    transform: translateY(-5px) rotate(1.5deg);
+  }
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+}
+
+@keyframes ufo-tractor-pulse {
+  0% {
+    opacity: 0.6;
+    transform: scaleX(0.96);
+    transform-origin: 120px 96px;
+  }
+  100% {
+    opacity: 1;
+    transform: scaleX(1.04);
+    transform-origin: 120px 96px;
+  }
+}
+
+@keyframes ufo-object-levitate {
+  0% {
+    transform: translateY(18px) rotate(0deg) scale(0.9);
+    opacity: 0.8;
+  }
+  50% {
+    transform: translateY(-6px) rotate(12deg) scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-24px) rotate(-15deg) scale(1.12);
+    opacity: 1;
+  }
+}
+
+@keyframes ufo-thruster-glow {
+  0% {
+    opacity: 0.4;
+    transform: scale(0.85);
+    transform-origin: 120px 95px;
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1.25);
+    transform-origin: 120px 95px;
+  }
+}
+
+@keyframes ufo-alien-nod {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  30% { transform: translateY(-1.5px) rotate(-4deg); }
+  70% { transform: translateY(1px) rotate(3deg); }
+}
+
+@keyframes ufo-beacon-blink {
+  0% { opacity: 0.3; transform: scale(0.8); transform-origin: 120px 39px; }
+  100% { opacity: 1; transform: scale(1.3); transform-origin: 120px 39px; }
+}
+
+@keyframes ufo-radar-expand {
+  0% {
+    opacity: 0.6;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}
+
+@keyframes ufo-scan-line {
+  0% {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+  40% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(-30px);
+    opacity: 0;
+  }
+}
+
+@keyframes ufo-led-glow {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+}
+
+/* Audio Player Vinyl & Equalizer Animations */
+.vinyl-record.spinning {
+  animation: vinyl-rotate 8s linear infinite;
+}
+
+.vinyl-record.paused {
+  animation: none;
+}
+
+.equalizer-bar {
+  width: 3.5px;
+  background: linear-gradient(to top, var(--accent), #38bdf8);
+  border-radius: 2px;
+  transition: height 0.2s ease;
+  min-height: 4px;
+}
+
+.equalizer-bar.active {
+  animation: equalizer-bounce 1.1s ease-in-out infinite alternate;
+}
+
+@keyframes vinyl-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes equalizer-bounce {
+  0% {
+    height: 15%;
+    opacity: 0.5;
+  }
+  50% {
+    height: 95%;
+    opacity: 1;
+  }
+  100% {
+    height: 35%;
+    opacity: 0.7;
+  }
+}
